@@ -15,8 +15,21 @@ model Booking {
   checkOut   DateTime @db.Date
   guests     Int      @default(1)
   totalPrice Decimal  @db.Decimal(10, 2)
+  platform   String   @default("Diretto") // Airbnb, Booking, Diretto, ecc.
   notes      String   @default("")
   createdAt  DateTime @default(now())
 
   @@map("bookings")
+}
+
+model Expense {
+  id          Int      @id @default(autoincrement())
+  date        DateTime @db.Date
+  category    String   // Pulizie, Manutenzione, Utenze, Tasse, Commissioni, Altro
+  description String
+  amount      Decimal  @db.Decimal(10, 2)
+  notes       String   @default("")
+  createdAt   DateTime @default(now())
+
+  @@map("expenses")
 }
