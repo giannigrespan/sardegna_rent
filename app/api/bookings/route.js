@@ -1,12 +1,20 @@
-import { sql } from '../../../db.js';
+import prisma from '../../../db.js';
 import { sendBookingConfirmation } from '../../../email.js';
 
-export async function GET() {
+export async function GET(request) {
+  const { searchParams } = new URL(request.url);
+  const year = searchParams.get('year');
+
   try {
-    const { rows } = await sql`
-      SELECT * FROM bookings ORDER BY check_in DESC
-    `;
-    return Response.json({ bookings: rows });
+    const where = year
+      ? { checkIn: { gte: new Date(`${year}-01-01`), lte: new Date(`${year}-12-31`) } }
+      : {};
+
+    const bookings = await prisma.booking.findMany({
+      where,
+      orderBy: { checkIn: 'desc' },
+    });
+    return Response.json({ bookings });
   } catch (err) {
     return Response.json({ error: err.message }, { status: 500 });
   }
@@ -14,28 +22,28 @@ export async function GET() {
 
 export async function POST(request) {
   try {
-    const { guestName, email, checkIn, checkOut, guests, totalPrice, notes } = await request.json();
+    const { guestName, email, checkIn, checkOut, guests, totalPrice, platform, notes } = await request.json();
 
     if (!guestName || !email || !checkIn || !checkOut || !guests || !totalPrice) {
       return Response.json({ error: 'Tutti i campi obbligatori devono essere compilati.' }, { status: 400 });
     }
 
-    const { rows } = await sql`
-      INSERT INTO bookings (guest_name, email, check_in, check_out, guests, total_price, notes)
-      VALUES (${guestName}, ${email}, ${checkIn}, ${checkOut}, ${guests}, ${totalPrice}, ${notes || ''})
-      RETURNING *
-    `;
-
-    await sendBookingConfirmation({
-      guestName,
-      email,
-      checkIn,
-      checkOut,
-      guests,
-      totalPrice,
+    const booking = await prisma.booking.create({
+      data: {
+        guestName,
+        email,
+        checkIn: new Date(checkIn),
+        checkOut: new Date(checkOut),
+        guests: parseInt(guests),
+        totalPrice: parseFloat(totalPrice),
+        platform: platform || 'Diretto',
+        notes: notes || '',
+      },
     });
 
-    return Response.json({ booking: rows[0] }, { status: 201 });
+    await sendBookingConfirmation({ guestName, email, checkIn, checkOut, guests, totalPrice });
+
+    return Response.json({ booking }, { status: 201 });
   } catch (err) {
     return Response.json({ error: err.message }, { status: 500 });
   }

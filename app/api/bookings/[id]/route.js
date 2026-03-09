@@ -1,14 +1,14 @@
-import { sql } from '../../../../db.js';
+import prisma from '../../../../db.js';
 
 export async function GET(request, { params }) {
   try {
-    const { rows } = await sql`
-      SELECT * FROM bookings WHERE id = ${params.id}
-    `;
-    if (rows.length === 0) {
+    const booking = await prisma.booking.findUnique({
+      where: { id: parseInt(params.id) },
+    });
+    if (!booking) {
       return Response.json({ error: 'Prenotazione non trovata.' }, { status: 404 });
     }
-    return Response.json({ booking: rows[0] });
+    return Response.json({ booking });
   } catch (err) {
     return Response.json({ error: err.message }, { status: 500 });
   }
@@ -18,23 +18,20 @@ export async function PUT(request, { params }) {
   try {
     const { guestName, email, checkIn, checkOut, guests, totalPrice, notes } = await request.json();
 
-    const { rows } = await sql`
-      UPDATE bookings
-      SET guest_name = ${guestName},
-          email = ${email},
-          check_in = ${checkIn},
-          check_out = ${checkOut},
-          guests = ${guests},
-          total_price = ${totalPrice},
-          notes = ${notes || ''}
-      WHERE id = ${params.id}
-      RETURNING *
-    `;
+    const booking = await prisma.booking.update({
+      where: { id: parseInt(params.id) },
+      data: {
+        guestName,
+        email,
+        checkIn: new Date(checkIn),
+        checkOut: new Date(checkOut),
+        guests: parseInt(guests),
+        totalPrice: parseFloat(totalPrice),
+        notes: notes || '',
+      },
+    });
 
-    if (rows.length === 0) {
-      return Response.json({ error: 'Prenotazione non trovata.' }, { status: 404 });
-    }
-    return Response.json({ booking: rows[0] });
+    return Response.json({ booking });
   } catch (err) {
     return Response.json({ error: err.message }, { status: 500 });
   }
@@ -42,7 +39,9 @@ export async function PUT(request, { params }) {
 
 export async function DELETE(request, { params }) {
   try {
-    await sql`DELETE FROM bookings WHERE id = ${params.id}`;
+    await prisma.booking.delete({
+      where: { id: parseInt(params.id) },
+    });
     return Response.json({ success: true });
   } catch (err) {
     return Response.json({ error: err.message }, { status: 500 });

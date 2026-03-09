@@ -1,32 +1,38 @@
-import { sql } from '../../../db.js';
+import prisma from '../../../db.js';
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
-  const year = searchParams.get('year') || new Date().getFullYear();
-  const month = searchParams.get('month'); // optional filter
+  const year = parseInt(searchParams.get('year') || new Date().getFullYear());
+  const month = searchParams.get('month') ? parseInt(searchParams.get('month')) : null;
 
   try {
-    let rows;
+    let where = {};
+
     if (month) {
-      const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
-      const endDate = `${year}-${String(month).padStart(2, '0')}-31`;
-      ({ rows } = await sql`
-        SELECT id, guest_name, check_in, check_out, guests, total_price
-        FROM bookings
-        WHERE check_in <= ${endDate} AND check_out >= ${startDate}
-        ORDER BY check_in
-      `);
+      const startDate = new Date(year, month - 1, 1);
+      const endDate = new Date(year, month, 0); // ultimo giorno del mese
+      where = {
+        checkIn: { lte: endDate },
+        checkOut: { gte: startDate },
+      };
     } else {
-      ({ rows } = await sql`
-        SELECT id, guest_name, check_in, check_out, guests, total_price
-        FROM bookings
-        WHERE EXTRACT(YEAR FROM check_in::date) = ${year}
-           OR EXTRACT(YEAR FROM check_out::date) = ${year}
-        ORDER BY check_in
-      `);
+      const startOfYear = new Date(year, 0, 1);
+      const endOfYear = new Date(year, 11, 31);
+      where = {
+        OR: [
+          { checkIn: { gte: startOfYear, lte: endOfYear } },
+          { checkOut: { gte: startOfYear, lte: endOfYear } },
+        ],
+      };
     }
 
-    return Response.json({ bookings: rows });
+    const bookings = await prisma.booking.findMany({
+      where,
+      select: { id: true, guestName: true, checkIn: true, checkOut: true, guests: true, totalPrice: true },
+      orderBy: { checkIn: 'asc' },
+    });
+
+    return Response.json({ bookings });
   } catch (err) {
     return Response.json({ error: err.message }, { status: 500 });
   }

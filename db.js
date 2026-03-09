@@ -1,3 +1,9 @@
-import { sql } from '@vercel/postgres';
+import { PrismaClient } from '@prisma/client';
 
-export { sql };
+const globalForPrisma = globalThis;
+
+const prisma = globalForPrisma.prisma ?? new PrismaClient();
+
+if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
+
+export default prisma;
